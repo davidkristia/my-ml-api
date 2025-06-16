@@ -16,7 +16,7 @@ scaler = joblib.load('scaler.pkl')
 CSV_PATH = 'tourism_with_predicted_clusters.csv'
 df = pd.read_csv(CSV_PATH)
 
-# Simpan rencana yang ditambahkan secara manual
+# Simpan rencana manual dari user
 added_plans = []
 
 @app.route('/')
@@ -28,7 +28,7 @@ def home():
             'GET /get-recommendations/<cluster_id>': 'Ambil rekomendasi dari cluster',
             'GET /generate-itinerary/<cluster_id>': 'Buat itinerary otomatis dari cluster',
             'POST /add-plan/<cluster_id>': 'Tambah rencana wisata ke cluster tertentu',
-            'GET /plans/<cluster_id>': 'Ambil semua rencana perjalanan dari cluster',
+            'GET /plans/<cluster_id>': 'Ambil semua rencana dari cluster',
             'GET /get-added-plans': 'Ambil semua rencana user yang ditambahkan'
         }
     })
@@ -90,33 +90,30 @@ def generate_itinerary(cluster_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/add-plan/<int:cluster_id>', methods=['POST', 'OPTIONS'])
+# ✅ Fix field sesuai frontend: name, description, days
+@app.route('/add-plan/<int:cluster_id>', methods=['POST'])
 def add_plan(cluster_id):
     try:
         data = request.get_json()
 
-        place_name = data.get('Place_Name')
-        category = data.get('Category')
-        city = data.get('City')
-        rating = float(data.get('Rating', 0))
-        price = int(data.get('Price', 0))
+        name = data.get('name')
+        description = data.get('description', '')
+        days = int(data.get('days', 1))
 
-        if not all([place_name, category, city]):
-            return jsonify({'error': 'Field Place_Name, Category, dan City wajib diisi'}), 400
+        if not name:
+            return jsonify({'error': 'Field name wajib diisi'}), 400
 
         new_plan = {
             'cluster': cluster_id,
-            'Place_Name': place_name,
-            'Category': category,
-            'City': city,
-            'Rating': rating,
-            'Price': price
+            'Place_Name': name,
+            'Description': description,
+            'Days': days
         }
 
         added_plans.append(new_plan)
 
         return jsonify({
-            'message': '✅ Rencana wisata berhasil ditambahkan',
+            'message': '✅ Rencana berhasil ditambahkan',
             'data': new_plan
         })
 
