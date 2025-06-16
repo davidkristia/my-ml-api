@@ -5,9 +5,11 @@ import pandas as pd
 import os
 from sklearn.preprocessing import StandardScaler
 
+# Inisialisasi Flask
 app = Flask(__name__)
 CORS(app)
 
+# Load model dan scaler
 kmeans = joblib.load('kmeans_model.pkl')
 scaler = joblib.load('scaler.pkl')
 df = pd.read_csv('tourism_with_predicted_clusters.csv')
@@ -20,7 +22,8 @@ def home():
             'POST /predict-cluster': 'Prediksi cluster dari input user',
             'GET /get-recommendations/<cluster_id>': 'Ambil rekomendasi dari cluster',
             'GET /generate-itinerary/<cluster_id>': 'Buat itinerary otomatis dari cluster',
-            'POST /add-plan/<cluster_id>': 'Tambah rencana wisata ke cluster tertentu'
+            'POST /add-plan/<cluster_id>': 'Tambah rencana wisata ke cluster tertentu',
+            'GET /get-added-plans': 'Ambil semua rencana yang ditambahkan oleh pengguna'
         }
     })
 
@@ -111,6 +114,19 @@ def add_plan(cluster_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
+# ✅ Endpoint baru untuk ambil semua rencana yang ditambahkan
+@app.route('/get-added-plans', methods=['GET'])
+def get_added_plans():
+    try:
+        all_data = df[['Place_Name', 'Category', 'City', 'Rating', 'Price', 'Predicted_Cluster']]
+        return jsonify({
+            'total_plans': len(all_data),
+            'plans': all_data.to_dict(orient='records')
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Jalankan server Flask
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
