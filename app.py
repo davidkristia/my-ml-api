@@ -5,7 +5,6 @@ import pandas as pd
 import os
 from sklearn.preprocessing import StandardScaler
 
-# Inisialisasi Flask
 app = Flask(__name__)
 CORS(app)
 
@@ -13,9 +12,12 @@ CORS(app)
 kmeans = joblib.load('kmeans_model.pkl')
 scaler = joblib.load('scaler.pkl')
 
-# Load data wisata
+# Load data awal dari CSV
 CSV_PATH = 'tourism_with_predicted_clusters.csv'
 df = pd.read_csv(CSV_PATH)
+
+# Simpan rencana yang ditambahkan secara manual
+added_plans = []
 
 @app.route('/')
 def home():
@@ -26,7 +28,8 @@ def home():
             'GET /get-recommendations/<cluster_id>': 'Ambil rekomendasi dari cluster',
             'GET /generate-itinerary/<cluster_id>': 'Buat itinerary otomatis dari cluster',
             'POST /add-plan/<cluster_id>': 'Tambah rencana wisata ke cluster tertentu',
-            'GET /plans/<cluster_id>': 'Ambil semua rencana perjalanan dari cluster'
+            'GET /plans/<cluster_id>': 'Ambil semua rencana perjalanan dari cluster',
+            'GET /get-added-plans': 'Ambil semua rencana user yang ditambahkan'
         }
     })
 
@@ -90,50 +93,46 @@ def generate_itinerary(cluster_id):
 @app.route('/add-plan/<int:cluster_id>', methods=['POST', 'OPTIONS'])
 def add_plan(cluster_id):
     try:
-        new_data = request.get_json()
-        place_name = new_data.get('Place_Name')
-        category = new_data.get('Category')
-        city = new_data.get('City')
-        rating = float(new_data.get('Rating'))
-        price = float(new_data.get('Price'))
+        data = request.get_json()
+        name = data.get('name')
+        description = data.get('description', '')
+        days = int(data.get('days', 1))
 
-        new_row = {
-            'Place_Name': place_name,
-            'Category': category,
-            'City': city,
-            'Rating': rating,
-            'Price': price,
-            'Predicted_Cluster': cluster_id
+        new_plan = {
+            'cluster': cluster_id,
+            'name': name,
+            'description': description,
+            'days': days
         }
 
-        global df
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-        df.to_csv(CSV_PATH, index=False)
+        added_plans.append(new_plan)
 
         return jsonify({
             'message': '✅ Rencana wisata berhasil ditambahkan',
-            'data': new_row
+            'data': new_plan
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-# ✅ Endpoint baru: ambil semua rencana perjalanan dari cluster
 @app.route('/plans/<int:cluster_id>', methods=['GET'])
-def get_plans(cluster_id):
+def get_plans_by_cluster(cluster_id):
     try:
-        plans = df[df['Predicted_Cluster'] == cluster_id][[
-            'Place_Name', 'Category', 'City', 'Rating', 'Price'
-        ]]
-        result = plans.to_dict(orient='records')
+        filtered = [plan for plan in added_plans if int(plan['cluster']) == cluster_id]
         return jsonify({
             'cluster': cluster_id,
-            'total_plans': len(result),
-            'plans': result
+            'total_plans': len(filtered),
+            'plans': filtered
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Jalankan server
+@app.route('/get-added-plans', methods=['GET'])
+def get_all_added_plans():
+    try:
+        return jsonify({'plans': added_plans})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
