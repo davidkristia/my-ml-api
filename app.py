@@ -3,21 +3,30 @@ from flask_cors import CORS
 import joblib
 import pandas as pd
 import os
+import json
 from sklearn.preprocessing import StandardScaler
 
 app = Flask(__name__)
 CORS(app)
 
-# Load model dan scaler
 kmeans = joblib.load('kmeans_model.pkl')
 scaler = joblib.load('scaler.pkl')
-
-# Load data awal dari CSV
 CSV_PATH = 'tourism_with_predicted_clusters.csv'
+JSON_PLAN_PATH = 'added_plans.json'
+
 df = pd.read_csv(CSV_PATH)
 
-# Simpan rencana yang ditambahkan secara manual
-added_plans = []
+# Load rencana dari file JSON
+def load_added_plans():
+    if os.path.exists(JSON_PLAN_PATH):
+        with open(JSON_PLAN_PATH, 'r') as file:
+            return json.load(file)
+    return []
+
+# Simpan rencana ke file JSON
+def save_added_plans(plans):
+    with open(JSON_PLAN_PATH, 'w') as file:
+        json.dump(plans, file, indent=2)
 
 @app.route('/')
 def home():
@@ -29,7 +38,7 @@ def home():
             'GET /generate-itinerary/<cluster_id>': 'Buat itinerary otomatis dari cluster',
             'POST /add-plan/<cluster_id>': 'Tambah rencana wisata ke cluster tertentu',
             'GET /plans/<cluster_id>': 'Ambil semua rencana perjalanan dari cluster',
-            'GET /get-added-plans': 'Ambil semua rencana user yang ditambahkan'
+            'GET /get-added-plans': 'Ambil semua rencana yang ditambahkan'
         }
     })
 
@@ -90,38 +99,38 @@ def generate_itinerary(cluster_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/add-plan/<int:cluster_id>', methods=['POST', 'OPTIONS'])
+@app.route('/add-plan/<int:cluster_id>', methods=['POST'])
 def add_plan(cluster_id):
     try:
-        data = request.get_json()
-        name = data.get('name')
-        description = data.get('description', '')
-        days = int(data.get('days', 1))
+        new_data = request.get_json()
 
-        new_plan = {
-            'cluster': cluster_id,
-            'name': name,
-            'description': description,
-            'days': days
+        new_row = {
+            'Place_Name': new_data.get('name'),
+            'Description': new_data.get('description'),
+            'Cluster_ID': int(cluster_id),
+            'Days': int(new_data.get('days'))
         }
 
-        added_plans.append(new_plan)
+        plans = load_added_plans()
+        plans.append(new_row)
+        save_added_plans(plans)
 
         return jsonify({
-            'message': '✅ Rencana wisata berhasil ditambahkan',
-            'data': new_plan
+            'message': '✅ Rencana berhasil ditambahkan',
+            'data': new_row
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
 @app.route('/plans/<int:cluster_id>', methods=['GET'])
-def get_plans_by_cluster(cluster_id):
+def get_plans(cluster_id):
     try:
-        filtered = [plan for plan in added_plans if int(plan['cluster']) == cluster_id]
+        plans = load_added_plans()
+        cluster_plans = [p for p in plans if p.get('Cluster_ID') == cluster_id]
         return jsonify({
             'cluster': cluster_id,
-            'total_plans': len(filtered),
-            'plans': filtered
+            'total_plans': len(cluster_plans),
+            'plans': cluster_plans
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -129,7 +138,8 @@ def get_plans_by_cluster(cluster_id):
 @app.route('/get-added-plans', methods=['GET'])
 def get_all_added_plans():
     try:
-        return jsonify({'plans': added_plans})
+        plans = load_added_plans()
+        return jsonify({'plans': plans})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
