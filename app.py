@@ -12,7 +12,10 @@ CORS(app)
 # Load model dan scaler
 kmeans = joblib.load('kmeans_model.pkl')
 scaler = joblib.load('scaler.pkl')
-df = pd.read_csv('tourism_with_predicted_clusters.csv')
+
+# Load data wisata
+CSV_PATH = 'tourism_with_predicted_clusters.csv'
+df = pd.read_csv(CSV_PATH)
 
 @app.route('/')
 def home():
@@ -23,7 +26,7 @@ def home():
             'GET /get-recommendations/<cluster_id>': 'Ambil rekomendasi dari cluster',
             'GET /generate-itinerary/<cluster_id>': 'Buat itinerary otomatis dari cluster',
             'POST /add-plan/<cluster_id>': 'Tambah rencana wisata ke cluster tertentu',
-            'GET /get-added-plans': 'Ambil semua rencana yang ditambahkan oleh pengguna'
+            'GET /plans/<cluster_id>': 'Ambil semua rencana perjalanan dari cluster'
         }
     })
 
@@ -105,7 +108,7 @@ def add_plan(cluster_id):
 
         global df
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-        df.to_csv('tourism_with_predicted_clusters.csv', index=False)
+        df.to_csv(CSV_PATH, index=False)
 
         return jsonify({
             'message': '✅ Rencana wisata berhasil ditambahkan',
@@ -114,19 +117,23 @@ def add_plan(cluster_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-# ✅ Endpoint baru untuk ambil semua rencana yang ditambahkan
-@app.route('/get-added-plans', methods=['GET'])
-def get_added_plans():
+# ✅ Endpoint baru: ambil semua rencana perjalanan dari cluster
+@app.route('/plans/<int:cluster_id>', methods=['GET'])
+def get_plans(cluster_id):
     try:
-        all_data = df[['Place_Name', 'Category', 'City', 'Rating', 'Price', 'Predicted_Cluster']]
+        plans = df[df['Predicted_Cluster'] == cluster_id][[
+            'Place_Name', 'Category', 'City', 'Rating', 'Price'
+        ]]
+        result = plans.to_dict(orient='records')
         return jsonify({
-            'total_plans': len(all_data),
-            'plans': all_data.to_dict(orient='records')
+            'cluster': cluster_id,
+            'total_plans': len(result),
+            'plans': result
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Jalankan server Flask
+# Jalankan server
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
